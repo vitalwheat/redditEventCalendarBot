@@ -1,2 +1,2 @@
-const data = require('config.json');
-console.log(data);
+const data = require('./config.json');
+console.log(data.redditSecret);
