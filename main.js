@@ -1,7 +1,8 @@
 const sqlite3 = require('sqlite3').verbose();
 const fetch = require('node-fetch');
 const snoowrap = require('snoowrap');
-const data = require('./config.json');
+const config = require('./config.json');
+
 let url = "https://www.reddit.com/r/patest/new/.json";
 //wat dis
 let settings = {
@@ -11,11 +12,11 @@ const eventMentioned = "[event]";
 const approvedEvent = "!approve";
 const deniedEvent = "!deny";
 const r = new snoowrap({
-  username: data.userName,
-  password: data.password,
-  userAgent: data.userAgent,
-  clientId: data.clientId,
-  clientSecret: data.clientSecret
+  username: config.userName,
+  password: config.password,
+  userAgent: config.userAgent,
+  clientId: config.clientId,
+  clientSecret: config.clientSecret
 });
 
 
