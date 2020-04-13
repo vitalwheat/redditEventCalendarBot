@@ -6,13 +6,6 @@ const config = require('./config.json');
 const eventMentioned = "[event]";
 const approvedEvent = "!approve";
 const deniedEvent = "!deny";
-const r = new snoowrap({
-  username: config.userName,
-  password: config.password,
-  userAgent: config.userAgent,
-  clientId: config.clientId,
-  clientSecret: config.clientSecret
-});
 
 // Database setup
 let db;
@@ -24,6 +17,15 @@ try {
   // we cannot proceed further so let's abort our nodejs process right away
   process.abort();
 }
+
+// Reddit API setup
+const reddit = new snoowrap({
+  username: config.userName,
+  password: config.password,
+  userAgent: config.userAgent,
+  clientId: config.clientId,
+  clientSecret: config.clientSecret
+});
 
 // Loop main function
 main();
@@ -41,7 +43,7 @@ function main() {
     .then(res => res.json())
     .then((json) => {
       json.data.children.forEach((element) => {
-        checkIfProcessed(element.data, db, r);
+        checkIfProcessed(element.data, db, reddit);
       })
       //check for replies
       checkModMailUpdate();
@@ -54,24 +56,24 @@ function main() {
 
 
 //Checks if post has been processed previously
-//Takes Reddit unique identifier 
+//Takes Reddit unique identifier
 //Returns true if post has been added to database
 //Returns true if post has NOT been added to database
-function checkIfProcessed(redditData, db, r) {
+function checkIfProcessed(redditData, db, reddit) {
   db.get("SELECT name FROM redditPost WHERE name='" + redditData.name + "' AND processed='1'", function (error, postId) {
     if (!postId) {
       console.log("Processing post");
-      checkIfEvent(redditData, db, r);
+      checkIfEvent(redditData, db, reddit);
     }
   });
 }
 
 // Check if the reddit thread shows as an event
-function checkIfEvent(redditData, db, r) {
+function checkIfEvent(redditData, db, reddit) {
   if (redditData.title.toLowerCase().includes(eventMentioned)) {
-    sendModMailAlert(redditData, db, r);
+    sendModMailAlert(redditData, db, reddit);
     replyToEventHost(redditData);
-    r.getSubmission(redditData.name).remove({
+    reddit.getSubmission(redditData.name).remove({
       spam: true
     }).then(function (error) {
       console.log(error);
@@ -81,8 +83,8 @@ function checkIfEvent(redditData, db, r) {
   }
 }
 // Sends message to modmail alerting of event post
-function sendModMailAlert(redditData, db, r) {
-  r.createModmailDiscussion({
+function sendModMailAlert(redditData, db, reddit) {
+  reddit.createModmailDiscussion({
     body: 'Please check this event post at ' + redditData.url,
     subject: redditData.title + ' | New Event Post',
     srName: 'patest'
@@ -102,7 +104,7 @@ function saveModMailId(name, modMailId) {
 function checkModMailUpdate() {
   db.all("SELECT name, modMailId FROM redditPost WHERE modMailId IS NOT NULL", function (error, modMailId) {
     modMailId.forEach((row) => {
-      r.getNewModmailConversation(row.modMailId).fetch().then(checkForApproval.bind(null, row.name));
+      reddit.getNewModmailConversation(row.modMailId).fetch().then(checkForApproval.bind(null, row.name));
     });
   });
 
@@ -130,22 +132,22 @@ function checkForApproval(threadName, modMailConversation) {
 
 
 function denyEvent(threadName) {
-  r.getSubmission(threadName).reply(data.denyMessage);
+  reddit.getSubmission(threadName).reply(data.denyMessage);
   //deleteGreetingMessage(threadName);
-  r.getSubmission(threadName).lock();
+  reddit.getSubmission(threadName).lock();
 
 
 
 }
 
 function approveEvent(threadName) {
-  r.getSubmission(threadName).reply(data.approveMessage);
+  reddit.getSubmission(threadName).reply(data.approveMessage);
   //deleteGreetingMessage(threadName);
-  r.getSubmission(threadName).approve();
+  reddit.getSubmission(threadName).approve();
 }
 
 function replyToEventHost(redditData) {
-  r.getSubmission(redditData.name).reply(data.greetingMessage).then(function (returnData) {
+  reddit.getSubmission(redditData.name).reply(data.greetingMessage).then(function (returnData) {
 
     db.run("UPDATE redditPost SET greetingId = '" + returnData.name + "' WHERE name = '" + redditData.name + "'");
 
@@ -159,7 +161,7 @@ function deleteGreetingMessage(name) {
   db.get("SELECT greetingId FROM redditPost WHERE name='" + name + "'", function (error, commentId) {
     console.log(error);
     console.log(commentId);
-    r.getComment(commentId).body.then(console.log);
+    reddit.getComment(commentId).body.then(console.log);
 
   });
 
