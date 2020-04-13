@@ -1,6 +1,3 @@
-const approveMessage = "This event has been approved and should show on our calendar soon";
-const denyMessage = "This event post does not follow our event guidelines. For more information, contact the mod team at r/joinsquad"
-
 const data = require('./config.json');
 const fetch = require('node-fetch');
 let url = "https://www.reddit.com/r/patest/new/.json";
@@ -26,7 +23,7 @@ const sqlite3 = require('sqlite3').verbose();
 let db = new sqlite3.Database('./calendarBot.db');
 db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='redditPost'", function (error, tableName) {
   if (!tableName) {
-    db.run('CREATE TABLE redditPost(name text, processed int, modMailId text)');
+    db.run('CREATE TABLE redditPost(name text, processed int, modMailId text, greetingId text)');
   }
 });
 //end of sqlite setup
@@ -74,7 +71,12 @@ function checkIfProcessed(redditData, db, r) {
 function checkIfEvent(redditData, db, r) {
   if (redditData.title.toLowerCase().includes(eventMentioned)) {
     sendModMailAlert(redditData, db, r);
-    console.log(redditData.title);
+    replyToEventHost(redditData);
+    r.getSubmission(redditData.name).remove({
+      spam: true
+    }).then(function (error) {
+      console.log(error);
+    });
   } else {
     db.run("INSERT INTO redditPost (name, processed) VALUES ('" + redditData.name + "', '1')");
   }
@@ -129,9 +131,37 @@ function checkForApproval(threadName, modMailConversation) {
 
 
 function denyEvent(threadName) {
-  r.getSubmission(threadName).reply(denyMessage);
+  r.getSubmission(threadName).reply(data.denyMessage);
+  //deleteGreetingMessage(threadName);
+  r.getSubmission(threadName).lock();
+
+
+
 }
 
 function approveEvent(threadName) {
-  r.getSubmission(threadName).reply(approveMessage);
+  r.getSubmission(threadName).reply(data.approveMessage);
+  //deleteGreetingMessage(threadName);
+  r.getSubmission(threadName).approve();
+}
+
+function replyToEventHost(redditData) {
+  r.getSubmission(redditData.name).reply(data.greetingMessage).then(function (returnData) {
+
+    db.run("UPDATE redditPost SET greetingId = '" + returnData.name + "' WHERE name = '" + redditData.name + "'");
+
+  });
+
+}
+
+// This function is not currently working - the comment is not deleted
+function deleteGreetingMessage(name) {
+
+  db.get("SELECT greetingId FROM redditPost WHERE name='" + name + "'", function (error, commentId) {
+    console.log(error);
+    console.log(commentId);
+    r.getComment(commentId).body.then(console.log);
+
+  });
+
 }
