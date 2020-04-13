@@ -1,167 +1,278 @@
-const data = require('./config.json');
+const sqlite3 = require('sqlite3').verbose();
 const fetch = require('node-fetch');
-let url = "https://www.reddit.com/r/patest/new/.json";
-//wat dis
-let settings = {
-  method: "Get"
-};
+const snoowrap = require('snoowrap');
+const config = require('./config.json');
+
 const eventMentioned = "[event]";
 const approvedEvent = "!approve";
 const deniedEvent = "!deny";
-const snoowrap = require('snoowrap');
-const r = new snoowrap({
-  username: data.userName,
-  password: data.password,
-  userAgent: data.userAgent,
-  clientId: data.clientId,
-  clientSecret: data.clientSecret
-});
 
+// Database setup
+let db;
+try {
+  db = setupDatabase('calendarBot.db');
+} catch (error) {
+  console.error(`Failed to setup database`, error);
+  // Something went wrong while setting up the database! Without our db
+  // we cannot proceed further so let's abort our nodejs process right away
+  process.abort();
+}
 
-//sqlite setup
-const sqlite3 = require('sqlite3').verbose();
-let db = new sqlite3.Database('./calendarBot.db');
-db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='redditPost'", function (error, tableName) {
-  if (!tableName) {
-    db.run('CREATE TABLE redditPost(name text, processed int, modMailId text, greetingId text)');
-  }
+// Reddit API setup
+const reddit = new snoowrap({
+  username: config.userName,
+  password: config.password,
+  userAgent: config.userAgent,
+  clientId: config.clientId,
+  clientSecret: config.clientSecret
 });
-//end of sqlite setup
 
 // Loop main function
-main();
-setInterval(main, 10000);
+main().then(() => {
+  setInterval(main, 10000);
+});
 
 
 
 
-// Main execution loop
-function main() {
+/**
+ * Main execution loop
+ */
+async function main() {
   console.log("Running a loop");
-  fetch(url, settings)
-    .then(res => res.json())
-    .then((json) => {
-      json.data.children.forEach((element) => {
-        checkIfProcessed(element.data, db, r);
-      })
-      //check for replies
-      checkModMailUpdate();
 
+  // Fetch reddit posts
+  let posts;
+  try {
+    const response = await fetch(config.subredditUrl, {
+      method: "Get"
     });
+    const json = response.json();
+    posts = json.data.children;
+  } catch (error) {
+    console.error(error);
+    return;
+  }
 
+  // Process each post in parallel
+  const promises = posts.map(async (element) => {
+    const redditPost = element.data;
+    const isProcessed = await checkIfProcessed(redditPost);
+    if (isProcessed) {
+      return;
+    }
 
-}
+    // Mark this non-event post as processed
+    if (! checkIfEvent(redditPost)) {
+      db.run(`
+        INSERT INTO redditPost (name, processed) VALUES (
+          '${redditPost.name}',
+          '1'
+        )
+      `);
+      return;
+    }
 
-
-
-//Checks if post has been processed previously
-//Takes Reddit unique identifier 
-//Returns true if post has been added to database
-//Returns true if post has NOT been added to database
-function checkIfProcessed(redditData, db, r) {
-  db.get("SELECT name FROM redditPost WHERE name='" + redditData.name + "' AND processed='1'", function (error, postId) {
-    if (!postId) {
-      console.log("Processing post");
-      checkIfEvent(redditData, db, r);
+    console.log("Processing event");
+    try {
+      const submission = reddit.getSubmission(redditPost.name);
+      await sendModMailAlert(redditPost);
+      await replyToEventHost(submission, redditPost.name);
+      await submission.remove({
+        spam: true
+      });
+    } catch(error) {
+      console.error(error);
     }
   });
+  // Since we have a list of all our promises, we can wait until all promises
+  // are completed before moving on with "checkModMailUpdate"
+  await Promise.all(promises);
+
+  //check for replies
+  checkModMailUpdate();
 }
 
-// Check if the reddit thread shows as an event
-function checkIfEvent(redditData, db, r) {
-  if (redditData.title.toLowerCase().includes(eventMentioned)) {
-    sendModMailAlert(redditData, db, r);
-    replyToEventHost(redditData);
-    r.getSubmission(redditData.name).remove({
-      spam: true
-    }).then(function (error) {
-      console.log(error);
-    });
-  } else {
-    db.run("INSERT INTO redditPost (name, processed) VALUES ('" + redditData.name + "', '1')");
-  }
-}
-// Sends message to modmail alerting of event post
-function sendModMailAlert(redditData, db, r) {
-  r.createModmailDiscussion({
-    body: 'Please check this event post at ' + redditData.url,
-    subject: redditData.title + ' | New Event Post',
-    srName: 'patest'
-  }).then(saveModMailId.bind(null, redditData.name));
 
 
-}
-
-// Save message id to database
-function saveModMailId(name, modMailId) {
-  var rawJson = JSON.stringify(modMailId);
-  var parsedJson = JSON.parse(rawJson);
-  db.run("INSERT INTO redditPost (name, processed, modMailId) VALUES ('" + name + "','1', '" + parsedJson.id + "')");
-}
-
-// Check database for modmail conversations that have been approved/rejected and process
-function checkModMailUpdate() {
-  db.all("SELECT name, modMailId FROM redditPost WHERE modMailId IS NOT NULL", function (error, modMailId) {
-    modMailId.forEach((row) => {
-      r.getNewModmailConversation(row.modMailId).fetch().then(checkForApproval.bind(null, row.name));
+/**
+ * Checks if post has been processed previously
+ * Takes Reddit unique identifier
+ * Returns true if post has been added to database
+ * Returns true if post has NOT been added to database
+ *
+ * @param {Object} redditData
+ * @return {Promise<boolean>}
+ */
+function checkIfProcessed(redditData) {
+  return new Promise((resolve, reject) => {
+    db.get(`
+      SELECT name
+      FROM redditPost
+      WHERE name = '${redditData.name}'
+      AND processed = '1'
+  `, (error, postId) => {
+      if (error) {
+        return reject(error);
+      }
+      return resolve(postId !== undefined);
     });
   });
-
-
 }
 
-function checkForApproval(threadName, modMailConversation) {
+/**
+ * Check if the reddit thread shows as an event
+ *
+ * @param {Object} redditData
+ * @return {boolean}
+ */
+function checkIfEvent(redditData) {
+  return redditData.title.toLowerCase().includes(eventMentioned)
+}
 
-  var rawJson = JSON.stringify(modMailConversation);
-  var parsedJson = JSON.parse(rawJson);
-  parsedJson.messages.forEach((row) => {
+/**
+ * Sends message to modmail alerting of event post and saves its id in database
+ *
+ * @param {Object} redditData
+ * @return {Promise<void>}
+ */
+async function sendModMailAlert(redditData) {
+  const modmailConversation = await reddit.createModmailDiscussion({
+    body: `Please check this event post at ${redditData.url}`,
+    subject: `${redditData.title} | New Event Post`,
+    srName: 'patest'
+  });
+  await db.run(`
+    INSERT INTO redditPost (name, processed, modMailId) VALUES (
+      '${redditData.name}',
+      '1',
+      '${modmailConversation.id}'
+    )
+  `);
+}
+
+/**
+ * Check database for modmail conversations that have been approved/rejected and process
+ */
+function checkModMailUpdate() {
+  db.all(`
+    SELECT name, modMailId
+    FROM redditPost
+    WHERE modMailId IS NOT NULL
+  `, (error, modMailId) => {
+    modMailId.forEach((row) => {
+      reddit.getNewModmailConversation(row.modMailId).then((modmailConversation) => {
+        checkForApproval(row.name, modmailConversation);
+      });
+    });
+  });
+}
+
+/**
+ *
+ * @param {String} threadName
+ * @param {Object} modmailConversation
+ */
+function checkForApproval(threadName, modmailConversation) {
+  const query = `
+    UPDATE redditPost
+    SET modMailId = NULL
+    WHERE name = '${threadName}'
+  `;
+
+  modmailConversation.messages.forEach((row) => {
     if (row.bodyMarkdown.toLowerCase().includes(approvedEvent)) {
-      db.run("UPDATE redditPost SET modMailId = NULL WHERE name = '" + threadName + "'");
+      db.run(query);
       approveEvent(threadName);
-
     }
     if (row.bodyMarkdown.toLowerCase().includes(deniedEvent)) {
-      db.run("UPDATE redditPost SET modMailId = NULL WHERE name = '" + threadName + "'");
+      db.run(query);
       denyEvent(threadName);
-
     }
   });
-
 }
 
-
+/**
+ *
+ * @param {String} threadName
+ */
 function denyEvent(threadName) {
-  r.getSubmission(threadName).reply(data.denyMessage);
+  reddit.getSubmission(threadName).reply(config.denyMessage);
   //deleteGreetingMessage(threadName);
-  r.getSubmission(threadName).lock();
-
-
-
+  reddit.getSubmission(threadName).lock();
 }
 
+/**
+ *
+ * @param {String} threadName
+ */
 function approveEvent(threadName) {
-  r.getSubmission(threadName).reply(data.approveMessage);
+  reddit.getSubmission(threadName).reply(config.approveMessage);
   //deleteGreetingMessage(threadName);
-  r.getSubmission(threadName).approve();
+  reddit.getSubmission(threadName).approve();
 }
 
-function replyToEventHost(redditData) {
-  r.getSubmission(redditData.name).reply(data.greetingMessage).then(function (returnData) {
+/**
+ * Sends a greeting message to the event post
+ *
+ * @param {Object} submission
+ * @param {String} postName
+ * @return {Promise<void>}
+ */
+async function replyToEventHost(submission, postName) {
+  const reply = await submission.reply(config.greetingMessage);
 
-    db.run("UPDATE redditPost SET greetingId = '" + returnData.name + "' WHERE name = '" + redditData.name + "'");
-
-  });
-
+  await db.run(`
+    UPDATE redditPost
+    SET greetingId = '${reply.name}'
+    WHERE name = '${postName}'
+  `);
 }
 
-// This function is not currently working - the comment is not deleted
+/**
+ * This function is not currently working - the comment is not deleted
+ *
+ * @param {String} name
+ */
 function deleteGreetingMessage(name) {
-
-  db.get("SELECT greetingId FROM redditPost WHERE name='" + name + "'", function (error, commentId) {
+  db.get(`
+    SELECT greetingId
+    FROM redditPost
+    WHERE name = '${name}'
+  `, (error, commentId) => {
     console.log(error);
     console.log(commentId);
-    r.getComment(commentId).body.then(console.log);
+    reddit.getComment(commentId).body.then(console.log);
+  });
+}
 
+/**
+ * Setup the database and the tables used by our app
+ *
+ * @param {String} filename The filename of our database
+ * @return {sqlite3} The DB object to we'll be using
+ * @throws {Error} Throws exception if something went wrong while setting up our database
+ */
+function setupDatabase(filename) {
+  const db = new sqlite3.Database(`${__dirname}/${filename}`);
+
+  // Catches all errors from our DB instance and logs them
+  db.on('error', (error) => {
+    console.error('Database error', error);
   });
 
+  // Simplified table creation : creates the "redditPost" table
+  // if and only if it doesn't exist already
+  return db.run(`CREATE TABLE IF NOT EXISTS redditPost (
+      name text,
+      processed int,
+      modMailId text,
+      greetingId text
+  )`, {}, (error) => {
+    if (error) {
+      // The error will be catched by a try/catch where we'll call
+      // this "setupDatabase" function
+      throw error;
+    }
+  });
 }

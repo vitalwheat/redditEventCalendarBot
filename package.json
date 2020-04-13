@@ -1,0 +1,25 @@
+{
+  "name": "redditeventcalendarbot",
+  "version": "1.0.0",
+  "description": "Pulls event information from a subreddit post and adds to Google calendar",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitalwheat/redditEventCalendarBot.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vitalwheat/redditEventCalendarBot/issues"
+  },
+  "homepage": "https://github.com/vitalwheat/redditEventCalendarBot#readme",
+  "dependencies": {
+    "node-fetch": "^2.6.0",
+    "snoowrap": "^1.21.0",
+    "sqlite3": "^4.1.1"
+  }
+}
