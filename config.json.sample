@@ -4,5 +4,8 @@
     "userAgent": "",
     "clientId":  "",
     "clientSecret": "",
-    "subredditUrl": ""
+    "subredditUrl": "",
+    "denyMessage": "",
+    "approveMessage": "",
+    "greetingMessage": ""
 }

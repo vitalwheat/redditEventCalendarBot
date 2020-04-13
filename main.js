@@ -34,33 +34,43 @@ setInterval(main, 10000);
 
 
 
-// Main execution loop
+/**
+ * Main execution loop
+ */
 function main() {
   console.log("Running a loop");
   fetch(config.subredditUrl, {
     method: "Get"
-  })
-    .then(res => res.json())
-    .then((json) => {
-      json.data.children.forEach((element) => {
-        checkIfProcessed(element.data, db, reddit);
-      })
-      //check for replies
-      checkModMailUpdate();
-
+  }).then((res) => {
+    return res.json();
+  }).then((json) => {
+    json.data.children.forEach((element) => {
+      checkIfProcessed(element.data, db, reddit);
     });
-
-
+    //check for replies
+    checkModMailUpdate();
+  });
 }
 
 
 
-//Checks if post has been processed previously
-//Takes Reddit unique identifier
-//Returns true if post has been added to database
-//Returns true if post has NOT been added to database
+/**
+ * Checks if post has been processed previously
+ * Takes Reddit unique identifier
+ * Returns true if post has been added to database
+ * Returns true if post has NOT been added to database
+ *
+ * @param redditData
+ * @param db
+ * @param reddit
+ */
 function checkIfProcessed(redditData, db, reddit) {
-  db.get("SELECT name FROM redditPost WHERE name='" + redditData.name + "' AND processed='1'", function (error, postId) {
+  db.get(`
+    SELECT name
+    FROM redditPost
+    WHERE name = '${redditData.name}'
+    AND processed = '1'
+  `, (error, postId) => {
     if (!postId) {
       console.log("Processing post");
       checkIfEvent(redditData, db, reddit);
@@ -68,107 +78,156 @@ function checkIfProcessed(redditData, db, reddit) {
   });
 }
 
-// Check if the reddit thread shows as an event
+/**
+ * Check if the reddit thread shows as an event
+ *
+ * @param redditData
+ * @param db
+ * @param reddit
+ */
 function checkIfEvent(redditData, db, reddit) {
   if (redditData.title.toLowerCase().includes(eventMentioned)) {
     sendModMailAlert(redditData, db, reddit);
     replyToEventHost(redditData);
     reddit.getSubmission(redditData.name).remove({
       spam: true
-    }).then(function (error) {
+    }).then((error) => {
       console.log(error);
     });
   } else {
-    db.run("INSERT INTO redditPost (name, processed) VALUES ('" + redditData.name + "', '1')");
+    db.run(`
+      INSERT INTO redditPost (name, processed) VALUES (
+        '${redditData.name}',
+        '1'
+      )
+    `);
   }
 }
-// Sends message to modmail alerting of event post
+
+/**
+ * Sends message to modmail alerting of event post
+ *
+ * @param redditData
+ * @param db
+ * @param reddit
+ */
 function sendModMailAlert(redditData, db, reddit) {
   reddit.createModmailDiscussion({
-    body: 'Please check this event post at ' + redditData.url,
-    subject: redditData.title + ' | New Event Post',
+    body: `Please check this event post at ${redditData.url}`,
+    subject: `${redditData.title} | New Event Post`,
     srName: 'patest'
   }).then(saveModMailId.bind(null, redditData.name));
-
-
 }
 
-// Save message id to database
-function saveModMailId(name, modMailId) {
-  var rawJson = JSON.stringify(modMailId);
-  var parsedJson = JSON.parse(rawJson);
-  db.run("INSERT INTO redditPost (name, processed, modMailId) VALUES ('" + name + "','1', '" + parsedJson.id + "')");
+/**
+ * Save message id to database
+ *
+ * @param name
+ * @param modmailConversation
+ */
+function saveModMailId(name, modmailConversation) {
+  db.run(`
+    INSERT INTO redditPost (name, processed, modMailId) VALUES (
+      '${name}',
+      '1',
+      '${modmailConversation.id}'
+    )
+  `);
 }
 
-// Check database for modmail conversations that have been approved/rejected and process
+/**
+ * Check database for modmail conversations that have been approved/rejected and process
+ */
 function checkModMailUpdate() {
-  db.all("SELECT name, modMailId FROM redditPost WHERE modMailId IS NOT NULL", function (error, modMailId) {
+  db.all(`
+    SELECT name, modMailId
+    FROM redditPost
+    WHERE modMailId IS NOT NULL
+  `, (error, modMailId) => {
     modMailId.forEach((row) => {
       reddit.getNewModmailConversation(row.modMailId).fetch().then(checkForApproval.bind(null, row.name));
     });
   });
-
-
 }
 
-function checkForApproval(threadName, modMailConversation) {
+/**
+ *
+ * @param threadName
+ * @param modmailConversation
+ */
+function checkForApproval(threadName, modmailConversation) {
+  const query = `
+    UPDATE redditPost
+    SET modMailId = NULL
+    WHERE name = '${threadName}'
+  `;
 
-  var rawJson = JSON.stringify(modMailConversation);
-  var parsedJson = JSON.parse(rawJson);
-  parsedJson.messages.forEach((row) => {
+  modmailConversation.messages.forEach((row) => {
     if (row.bodyMarkdown.toLowerCase().includes(approvedEvent)) {
-      db.run("UPDATE redditPost SET modMailId = NULL WHERE name = '" + threadName + "'");
+      db.run(query);
       approveEvent(threadName);
-
     }
     if (row.bodyMarkdown.toLowerCase().includes(deniedEvent)) {
-      db.run("UPDATE redditPost SET modMailId = NULL WHERE name = '" + threadName + "'");
+      db.run(query);
       denyEvent(threadName);
-
     }
   });
-
 }
 
-
+/**
+ *
+ * @param threadName
+ */
 function denyEvent(threadName) {
-  reddit.getSubmission(threadName).reply(data.denyMessage);
+  reddit.getSubmission(threadName).reply(config.denyMessage);
   //deleteGreetingMessage(threadName);
   reddit.getSubmission(threadName).lock();
-
-
-
 }
 
+/**
+ *
+ * @param threadName
+ */
 function approveEvent(threadName) {
-  reddit.getSubmission(threadName).reply(data.approveMessage);
+  reddit.getSubmission(threadName).reply(config.approveMessage);
   //deleteGreetingMessage(threadName);
   reddit.getSubmission(threadName).approve();
 }
 
+/**
+ *
+ * @param redditData
+ */
 function replyToEventHost(redditData) {
-  reddit.getSubmission(redditData.name).reply(data.greetingMessage).then(function (returnData) {
-
-    db.run("UPDATE redditPost SET greetingId = '" + returnData.name + "' WHERE name = '" + redditData.name + "'");
-
+  reddit.getSubmission(redditData.name).reply(config.greetingMessage).then((returnData) => {
+    db.run(`
+      UPDATE redditPost
+      SET greetingId = '${returnData.name}'
+      WHERE name = '${redditData.name}'
+    `);
   });
-
 }
 
-// This function is not currently working - the comment is not deleted
+/**
+ * This function is not currently working - the comment is not deleted
+ *
+ * @param name
+ */
 function deleteGreetingMessage(name) {
-
-  db.get("SELECT greetingId FROM redditPost WHERE name='" + name + "'", function (error, commentId) {
+  db.get(`
+    SELECT greetingId
+    FROM redditPost
+    WHERE name = '${name}'
+  `, (error, commentId) => {
     console.log(error);
     console.log(commentId);
     reddit.getComment(commentId).body.then(console.log);
-
   });
-
 }
 
 /**
  * Setup the database and the tables used by our app
+ *
  * @param {String} filename The filename of our database
  * @return {sqlite3} The DB object to we'll be using
  * @throws {Error} Throws exception if something went wrong while setting up our database
