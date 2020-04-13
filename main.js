@@ -4,10 +4,6 @@ const snoowrap = require('snoowrap');
 const config = require('./config.json');
 
 let url = "https://www.reddit.com/r/patest/new/.json";
-//wat dis
-let settings = {
-  method: "Get"
-};
 const eventMentioned = "[event]";
 const approvedEvent = "!approve";
 const deniedEvent = "!deny";
@@ -39,7 +35,9 @@ setInterval(main, 10000);
 // Main execution loop
 function main() {
   console.log("Running a loop");
-  fetch(url, settings)
+  fetch(url, {
+    method: "Get"
+  })
     .then(res => res.json())
     .then((json) => {
       json.data.children.forEach((element) => {
