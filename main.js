@@ -76,7 +76,7 @@ async function main() {
     console.log("Processing event");
     try {
       await sendModMailAlert(redditPost);
-      replyToEventHost(redditPost);
+      await replyToEventHost(redditPost);
       await reddit.getSubmission(redditPost.name).remove({
         spam: true
       });
@@ -212,17 +212,19 @@ function approveEvent(threadName) {
 }
 
 /**
+ * Sends a greeting message to the event post
  *
  * @param {Object} redditData
+ * @return {Promise<void>}
  */
-function replyToEventHost(redditData) {
-  reddit.getSubmission(redditData.name).reply(config.greetingMessage).then((returnData) => {
-    db.run(`
-      UPDATE redditPost
-      SET greetingId = '${returnData.name}'
-      WHERE name = '${redditData.name}'
-    `);
-  });
+async function replyToEventHost(redditData) {
+  const reply = await reddit.getSubmission(redditData.name).reply(config.greetingMessage);
+
+  await db.run(`
+    UPDATE redditPost
+    SET greetingId = '${reply.name}'
+    WHERE name = '${redditData.name}'
+  `);
 }
 
 /**
