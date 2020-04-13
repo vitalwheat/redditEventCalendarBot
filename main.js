@@ -243,7 +243,8 @@ function setupDatabase(filename) {
   return db.run(`CREATE TABLE IF NOT EXISTS redditPost (
       name text,
       processed int,
-      modMailId text
+      modMailId text,
+      greetingId text
   )`, {}, (error) => {
     if (error) {
       // The error will be catched by a try/catch where we'll call
