@@ -45,8 +45,19 @@ function main() {
     return res.json();
   }).then((json) => {
     json.data.children.forEach((element) => {
-      checkIfProcessed(element.data);
+      checkIfProcessed(element.data).then((isProcessed) => {
+        if (!isProcessed) {
+          console.log("Processing post");
+          checkIfEvent(element.data);
+        }
+      });
     });
+    // Warning: "checkIfProcessed" is asyncronous, and we call it inside a loop.
+    // As we don't wait for all the asyncronous calls to be completed,
+    // we don't know when they'll be "finished".
+    // Therefore the next call to "checkModMailUpdate" will probably
+    // be executed BEFORE the posts processing is completed. Keep that in mind!
+
     //check for replies
     checkModMailUpdate();
   });
@@ -61,18 +72,21 @@ function main() {
  * Returns true if post has NOT been added to database
  *
  * @param {Object} redditData
+ * @return {Promise<boolean>}
  */
 function checkIfProcessed(redditData) {
-  db.get(`
-    SELECT name
-    FROM redditPost
-    WHERE name = '${redditData.name}'
-    AND processed = '1'
+  return new Promise((resolve, reject) => {
+    db.get(`
+      SELECT name
+      FROM redditPost
+      WHERE name = '${redditData.name}'
+      AND processed = '1'
   `, (error, postId) => {
-    if (!postId) {
-      console.log("Processing post");
-      checkIfEvent(redditData);
-    }
+      if (error) {
+        return reject(error);
+      }
+      return resolve(postId !== undefined);
+    });
   });
 }
 
