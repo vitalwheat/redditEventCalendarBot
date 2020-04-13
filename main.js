@@ -141,7 +141,7 @@ function checkModMailUpdate() {
     WHERE modMailId IS NOT NULL
   `, (error, modMailId) => {
     modMailId.forEach((row) => {
-      reddit.getNewModmailConversation(row.modMailId).fetch().then((modmailConversation) => {
+      reddit.getNewModmailConversation(row.modMailId).then((modmailConversation) => {
         checkForApproval(row.name, modmailConversation);
       });
     });
