@@ -45,7 +45,7 @@ function main() {
     return res.json();
   }).then((json) => {
     json.data.children.forEach((element) => {
-      checkIfProcessed(element.data, db, reddit);
+      checkIfProcessed(element.data);
     });
     //check for replies
     checkModMailUpdate();
@@ -60,11 +60,9 @@ function main() {
  * Returns true if post has been added to database
  * Returns true if post has NOT been added to database
  *
- * @param redditData
- * @param db
- * @param reddit
+ * @param {Object} redditData
  */
-function checkIfProcessed(redditData, db, reddit) {
+function checkIfProcessed(redditData) {
   db.get(`
     SELECT name
     FROM redditPost
@@ -73,7 +71,7 @@ function checkIfProcessed(redditData, db, reddit) {
   `, (error, postId) => {
     if (!postId) {
       console.log("Processing post");
-      checkIfEvent(redditData, db, reddit);
+      checkIfEvent(redditData);
     }
   });
 }
@@ -81,13 +79,11 @@ function checkIfProcessed(redditData, db, reddit) {
 /**
  * Check if the reddit thread shows as an event
  *
- * @param redditData
- * @param db
- * @param reddit
+ * @param {Object} redditData
  */
-function checkIfEvent(redditData, db, reddit) {
+function checkIfEvent(redditData) {
   if (redditData.title.toLowerCase().includes(eventMentioned)) {
-    sendModMailAlert(redditData, db, reddit);
+    sendModMailAlert(redditData);
     replyToEventHost(redditData);
     reddit.getSubmission(redditData.name).remove({
       spam: true
@@ -107,11 +103,9 @@ function checkIfEvent(redditData, db, reddit) {
 /**
  * Sends message to modmail alerting of event post
  *
- * @param redditData
- * @param db
- * @param reddit
+ * @param {Object} redditData
  */
-function sendModMailAlert(redditData, db, reddit) {
+function sendModMailAlert(redditData) {
   reddit.createModmailDiscussion({
     body: `Please check this event post at ${redditData.url}`,
     subject: `${redditData.title} | New Event Post`,
@@ -122,8 +116,8 @@ function sendModMailAlert(redditData, db, reddit) {
 /**
  * Save message id to database
  *
- * @param name
- * @param modmailConversation
+ * @param {String} name
+ * @param {Object} modmailConversation
  */
 function saveModMailId(name, modmailConversation) {
   db.run(`
@@ -152,8 +146,8 @@ function checkModMailUpdate() {
 
 /**
  *
- * @param threadName
- * @param modmailConversation
+ * @param {String} threadName
+ * @param {Object} modmailConversation
  */
 function checkForApproval(threadName, modmailConversation) {
   const query = `
@@ -176,7 +170,7 @@ function checkForApproval(threadName, modmailConversation) {
 
 /**
  *
- * @param threadName
+ * @param {String} threadName
  */
 function denyEvent(threadName) {
   reddit.getSubmission(threadName).reply(config.denyMessage);
@@ -186,7 +180,7 @@ function denyEvent(threadName) {
 
 /**
  *
- * @param threadName
+ * @param {String} threadName
  */
 function approveEvent(threadName) {
   reddit.getSubmission(threadName).reply(config.approveMessage);
@@ -196,7 +190,7 @@ function approveEvent(threadName) {
 
 /**
  *
- * @param redditData
+ * @param {Object} redditData
  */
 function replyToEventHost(redditData) {
   reddit.getSubmission(redditData.name).reply(config.greetingMessage).then((returnData) => {
@@ -211,7 +205,7 @@ function replyToEventHost(redditData) {
 /**
  * This function is not currently working - the comment is not deleted
  *
- * @param name
+ * @param {String} name
  */
 function deleteGreetingMessage(name) {
   db.get(`
