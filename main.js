@@ -28,8 +28,9 @@ const reddit = new snoowrap({
 });
 
 // Loop main function
-main();
-setInterval(main, 10000);
+main().then(() => {
+  setInterval(main, 10000);
+});
 
 
 
@@ -37,48 +38,58 @@ setInterval(main, 10000);
 /**
  * Main execution loop
  */
-function main() {
+async function main() {
   console.log("Running a loop");
-  fetch(config.subredditUrl, {
-    method: "Get"
-  }).then((res) => {
-    return res.json();
-  }).then((json) => {
-    json.data.children.forEach((element) => {
-      const redditPost = element.data;
-      checkIfProcessed(redditPost).then((isProcessed) => {
-        if (isProcessed) {
-          return;
-        }
 
-        console.log("Processing post");
-        if (checkIfEvent(redditPost)) {
-          sendModMailAlert(redditPost);
-          replyToEventHost(redditPost);
-          reddit.getSubmission(redditPost.name).remove({
-            spam: true
-          }).then((error) => {
-            console.log(error);
-          });
-        } else {
-          db.run(`
-            INSERT INTO redditPost (name, processed) VALUES (
-              '${redditPost.name}',
-              '1'
-            )
-          `);
-        }
-      });
+  // Fetch reddit posts
+  let posts;
+  try {
+    const response = await fetch(config.subredditUrl, {
+      method: "Get"
     });
-    // Warning: "checkIfProcessed" is asyncronous, and we call it inside a loop.
-    // As we don't wait for all the asyncronous calls to be completed,
-    // we don't know when they'll be "finished".
-    // Therefore the next call to "checkModMailUpdate" will probably
-    // be executed BEFORE the posts processing is completed. Keep that in mind!
+    const json = response.json();
+    posts = json.data.children;
+  } catch (error) {
+    console.error(error);
+    return;
+  }
 
-    //check for replies
-    checkModMailUpdate();
+  // Process each post in parallel
+  const promises = posts.map(async (element) => {
+    const redditPost = element.data;
+    const isProcessed = await checkIfProcessed(redditPost);
+    if (isProcessed) {
+      return;
+    }
+
+    // Mark this non-event post as processed
+    if (! checkIfEvent(redditPost)) {
+      db.run(`
+        INSERT INTO redditPost (name, processed) VALUES (
+          '${redditPost.name}',
+          '1'
+        )
+      `);
+      return;
+    }
+
+    console.log("Processing event");
+    try {
+      sendModMailAlert(redditPost);
+      replyToEventHost(redditPost);
+      await reddit.getSubmission(redditPost.name).remove({
+        spam: true
+      });
+    } catch(error) {
+      console.error(error);
+    }
   });
+  // Since we have a list of all our promises, we can wait until all promises
+  // are completed before moving on with "checkModMailUpdate"
+  await Promise.all(promises);
+
+  //check for replies
+  checkModMailUpdate();
 }
 
 
