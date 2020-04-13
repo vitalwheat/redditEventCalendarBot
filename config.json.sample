@@ -3,5 +3,6 @@
     "password":  "",
     "userAgent": "",
     "clientId":  "",
-    "clientSecret": ""
+    "clientSecret": "",
+    "subredditUrl": ""
 }

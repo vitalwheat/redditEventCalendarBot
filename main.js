@@ -3,7 +3,6 @@ const fetch = require('node-fetch');
 const snoowrap = require('snoowrap');
 const config = require('./config.json');
 
-let url = "https://www.reddit.com/r/patest/new/.json";
 const eventMentioned = "[event]";
 const approvedEvent = "!approve";
 const deniedEvent = "!deny";
@@ -35,7 +34,7 @@ setInterval(main, 10000);
 // Main execution loop
 function main() {
   console.log("Running a loop");
-  fetch(url, {
+  fetch(config.subredditUrl, {
     method: "Get"
   })
     .then(res => res.json())
