@@ -110,7 +110,9 @@ function sendModMailAlert(redditData) {
     body: `Please check this event post at ${redditData.url}`,
     subject: `${redditData.title} | New Event Post`,
     srName: 'patest'
-  }).then(saveModMailId.bind(null, redditData.name));
+  }).then((modmailConversation) => {
+    saveModMailId(redditData.name, modmailConversation);
+  });
 }
 
 /**
@@ -139,7 +141,9 @@ function checkModMailUpdate() {
     WHERE modMailId IS NOT NULL
   `, (error, modMailId) => {
     modMailId.forEach((row) => {
-      reddit.getNewModmailConversation(row.modMailId).fetch().then(checkForApproval.bind(null, row.name));
+      reddit.getNewModmailConversation(row.modMailId).fetch().then((modmailConversation) => {
+        checkForApproval(row.name, modmailConversation);
+      });
     });
   });
 }
