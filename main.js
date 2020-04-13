@@ -45,10 +45,28 @@ function main() {
     return res.json();
   }).then((json) => {
     json.data.children.forEach((element) => {
-      checkIfProcessed(element.data).then((isProcessed) => {
-        if (!isProcessed) {
-          console.log("Processing post");
-          checkIfEvent(element.data);
+      const redditPost = element.data;
+      checkIfProcessed(redditPost).then((isProcessed) => {
+        if (isProcessed) {
+          return;
+        }
+
+        console.log("Processing post");
+        if (checkIfEvent(redditPost)) {
+          sendModMailAlert(redditPost);
+          replyToEventHost(redditPost);
+          reddit.getSubmission(redditPost.name).remove({
+            spam: true
+          }).then((error) => {
+            console.log(error);
+          });
+        } else {
+          db.run(`
+            INSERT INTO redditPost (name, processed) VALUES (
+              '${redditPost.name}',
+              '1'
+            )
+          `);
         }
       });
     });
@@ -94,24 +112,10 @@ function checkIfProcessed(redditData) {
  * Check if the reddit thread shows as an event
  *
  * @param {Object} redditData
+ * @return {boolean}
  */
 function checkIfEvent(redditData) {
-  if (redditData.title.toLowerCase().includes(eventMentioned)) {
-    sendModMailAlert(redditData);
-    replyToEventHost(redditData);
-    reddit.getSubmission(redditData.name).remove({
-      spam: true
-    }).then((error) => {
-      console.log(error);
-    });
-  } else {
-    db.run(`
-      INSERT INTO redditPost (name, processed) VALUES (
-        '${redditData.name}',
-        '1'
-      )
-    `);
-  }
+  return redditData.title.toLowerCase().includes(eventMentioned)
 }
 
 /**
