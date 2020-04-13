@@ -75,7 +75,7 @@ async function main() {
 
     console.log("Processing event");
     try {
-      sendModMailAlert(redditPost);
+      await sendModMailAlert(redditPost);
       replyToEventHost(redditPost);
       await reddit.getSubmission(redditPost.name).remove({
         spam: true
@@ -130,30 +130,20 @@ function checkIfEvent(redditData) {
 }
 
 /**
- * Sends message to modmail alerting of event post
+ * Sends message to modmail alerting of event post and saves its id in database
  *
  * @param {Object} redditData
+ * @return {Promise<void>}
  */
-function sendModMailAlert(redditData) {
-  reddit.createModmailDiscussion({
+async function sendModMailAlert(redditData) {
+  const modmailConversation = await reddit.createModmailDiscussion({
     body: `Please check this event post at ${redditData.url}`,
     subject: `${redditData.title} | New Event Post`,
     srName: 'patest'
-  }).then((modmailConversation) => {
-    saveModMailId(redditData.name, modmailConversation);
   });
-}
-
-/**
- * Save message id to database
- *
- * @param {String} name
- * @param {Object} modmailConversation
- */
-function saveModMailId(name, modmailConversation) {
-  db.run(`
+  await db.run(`
     INSERT INTO redditPost (name, processed, modMailId) VALUES (
-      '${name}',
+      '${redditData.name}',
       '1',
       '${modmailConversation.id}'
     )
