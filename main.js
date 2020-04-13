@@ -14,15 +14,16 @@ const r = new snoowrap({
   clientSecret: config.clientSecret
 });
 
-
-//sqlite setup
-let db = new sqlite3.Database('./calendarBot.db');
-db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='redditPost'", function (error, tableName) {
-  if (!tableName) {
-    db.run('CREATE TABLE redditPost(name text, processed int, modMailId text, greetingId text)');
-  }
-});
-//end of sqlite setup
+// Database setup
+let db;
+try {
+  db = setupDatabase('calendarBot.db');
+} catch (error) {
+  console.error(`Failed to setup database`, error);
+  // Something went wrong while setting up the database! Without our db
+  // we cannot proceed further so let's abort our nodejs process right away
+  process.abort();
+}
 
 // Loop main function
 main();
@@ -162,4 +163,33 @@ function deleteGreetingMessage(name) {
 
   });
 
+}
+
+/**
+ * Setup the database and the tables used by our app
+ * @param {String} filename The filename of our database
+ * @return {sqlite3} The DB object to we'll be using
+ * @throws {Error} Throws exception if something went wrong while setting up our database
+ */
+function setupDatabase(filename) {
+  const db = new sqlite3.Database(`${__dirname}/${filename}`);
+
+  // Catches all errors from our DB instance and logs them
+  db.on('error', (error) => {
+    console.error('Database error', error);
+  });
+
+  // Simplified table creation : creates the "redditPost" table
+  // if and only if it doesn't exist already
+  return db.run(`CREATE TABLE IF NOT EXISTS redditPost (
+      name text,
+      processed int,
+      modMailId text
+  )`, {}, (error) => {
+    if (error) {
+      // The error will be catched by a try/catch where we'll call
+      // this "setupDatabase" function
+      throw error;
+    }
+  });
 }
