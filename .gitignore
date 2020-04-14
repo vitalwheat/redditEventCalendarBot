@@ -3,3 +3,5 @@ node_modules/
 notes.txt
 calendarBot.db
 flowchart.xml
+credentials.json
+token.json
