@@ -20,7 +20,7 @@ fs.readFile('credentials.json', (err, content) => {
 
 const data = require('./config.json');
 const fetch = require('node-fetch');
-let url = "https://www.reddit.com/r/patest/new/.json";
+let url = "https://www.reddit.com/r/" + data.subreddit + "/new/.json";
 //wat dis
 let settings = {
   method: "Get"
@@ -118,7 +118,7 @@ function sendModMailAlert(redditData, db, r) {
   r.createModmailDiscussion({
     body: 'Please check this event post at ' + redditData.url,
     subject: redditData.title + ' | New Event Post',
-    srName: 'patest'
+    srName: data.subreddit
   }).then(saveModMailId.bind(null, redditData.name));
 
 
@@ -200,7 +200,7 @@ function deleteGreetingMessage(name) {
 }
 
 function updateSideBar() {
-  r.getSubreddit('patest').editSettings({
+  r.getSubreddit(data.subreddit).editSettings({
     description: 'This is a test sidebar update'
   })
 }
