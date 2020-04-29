@@ -37,6 +37,13 @@ const r = new snoowrap({
   clientSecret: data.clientSecret
 });
 
+// Check if ./calendarBot.db exists
+var firstRun = false;
+if (!fs.existsSync('./calendarBot.db')) {
+  firstRun = true;
+  console.log('Detected first run');
+  console.log(firstRun);
+}
 
 //sqlite setup
 const sqlite3 = require('sqlite3').verbose();
@@ -54,16 +61,24 @@ setInterval(main, 10000);
 
 // Main execution loop
 function main() {
-  console.log("Running a loop");
   fetch(url, settings)
     .then(res => res.json())
     .then((json) => {
       json.data.children.forEach((element) => {
-        checkIfProcessed(element.data, db, r);
+        // Check if this is the first run
+        // If so, do not process the first posts found
+        if (firstRun == true) {
+          db.run("INSERT INTO redditPost (name, processed) VALUES ('" + element.data.name + "', '1')");
+        } else {
+          checkIfProcessed(element.data, db, r);
+        }
       })
       //check for replies
       checkModMailUpdate();
 
+      // End first run mode
+    }).then(function () {
+      firstRun = false;
     });
 
 
