@@ -1,0 +1,28 @@
+{
+  "name": "redditeventcalendarbot",
+  "version": "1.0.0",
+  "description": "redditeventcalendarbot",
+  "main": "main.js",
+  "dependencies": {
+    "googleapis": "^39.2.0",
+    "node-fetch": "^2.6.0",
+    "request": "^2.88.2",
+    "snoowrap": "^1.21.0",
+    "sqlite3": "^4.1.1",
+    "tiny-json-http": "^7.1.2"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vitalwheat/redditEventCalendarBot.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vitalwheat/redditEventCalendarBot/issues"
+  },
+  "homepage": "https://github.com/vitalwheat/redditEventCalendarBot#readme"
+}
