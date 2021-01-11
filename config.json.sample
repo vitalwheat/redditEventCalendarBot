@@ -1,6 +1,6 @@
 {
-  "userName": "",
-  "password": "",
+  "redditUserName": "",
+  "redditPassword": "",
   "userAgent": "",
   "clientId": "",
   "clientSecret": "",

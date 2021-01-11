@@ -30,8 +30,8 @@ const approvedEvent = "!approve";
 const deniedEvent = "!deny";
 const snoowrap = require('snoowrap');
 const r = new snoowrap({
-  username: data.userName,
-  password: data.password,
+  username: data.redditUserName,
+  password: data.redditPassword,
   userAgent: data.userAgent,
   clientId: data.clientId,
   clientSecret: data.clientSecret
