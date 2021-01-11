@@ -30,11 +30,12 @@ const approvedEvent = "!approve";
 const deniedEvent = "!deny";
 const snoowrap = require('snoowrap');
 const r = new snoowrap({
-  username: data.redditUserName,
-  password: data.redditPassword,
+  //username: data.redditUserName,
+ // password: data.redditPassword,
   userAgent: data.userAgent,
   clientId: data.redditClientId,
-  clientSecret: data.redditClientSecret
+  clientSecret: data.redditClientSecret,
+  refreshToken: data.redditAuthToken
 });
 
 // Check if ./calendarBot.db exists
