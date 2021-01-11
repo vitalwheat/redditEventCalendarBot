@@ -33,8 +33,8 @@ const r = new snoowrap({
   username: data.redditUserName,
   password: data.redditPassword,
   userAgent: data.userAgent,
-  clientId: data.clientId,
-  clientSecret: data.clientSecret
+  clientId: data.redditClientId,
+  clientSecret: data.redditClientSecret
 });
 
 // Check if ./calendarBot.db exists
