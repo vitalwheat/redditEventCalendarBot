@@ -1,11 +1,12 @@
 {
   "redditUserName": "",
   "redditPassword": "",
+  "subRedditName":""
   "userAgent": "",
   "clientId": "",
   "clientSecret": "",
   "approveMessage": "This event has been approved and should show on our calendar soon",
   "denyMessage": "This event post does not follow our event guidelines. For more information, contact the mod team at r/joinsquad",
   "greetingMessage": "You just posted an event. We're about to give judgement",
-  "calendarId": ""
+  "calendarId": "",
 }

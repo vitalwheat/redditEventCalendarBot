@@ -20,7 +20,7 @@ fs.readFile('credentials.json', (err, content) => {
 
 const data = require('./config.json');
 const fetch = require('node-fetch');
-let url = "https://www.reddit.com/r/patest/new/.json";
+let url = "https://www.reddit.com/r/" + data.subRedditName + "/new/.json";
 //wat dis
 let settings = {
   method: "Get"
