@@ -19,6 +19,8 @@ fs.readFile('credentials.json', (err, content) => {
 });
 
 const data = require('./config.json');
+let rawdata = fs.readFileSync('./nicknames.json');
+let nicknames = JSON.parse(rawdata);
 const fetch = require('node-fetch');
 let url = "https://www.reddit.com/r/" + data.subRedditName + "/new/.json";
 //wat dis
@@ -58,7 +60,7 @@ db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='redditPost'"
 
 // Loop main function
 main();
-setInterval(main, 10000);
+setInterval(main, 300000);
 
 // Main execution loop
 function main() {
@@ -81,8 +83,13 @@ function main() {
     }).then(function () {
       firstRun = false;
     });
-
-
+    fs.readFile('credentials.json', (err, content) => {
+      if (err) return console.log('Error loading client secret file:', err);
+      // Authorize a client with credentials, then call the Google Calendar API.
+      authorize(JSON.parse(content), updateSideBar.bind(null));
+    });
+    
+   
 }
 
 
@@ -177,6 +184,7 @@ function approveEvent(threadName) {
   //deleteGreetingMessage(threadName);
   r.getSubmission(threadName).approve();
   sendToCalendar(threadName);
+
 }
 
 function replyToEventHost(redditData) {
@@ -200,16 +208,22 @@ function deleteGreetingMessage(name) {
 
 }
 
-function updateSideBar() {
-  r.getSubreddit('patest').editSettings({
-    description: 'This is a test sidebar update'
-  })
-}
+
 
 
 function sendToCalendar(name) {
 
   r.getSubmission(name).fetch().then((postData) => {
+
+    // Check if we have a nickname for this person and set the host value
+    var author = postData.author.name;
+    if(typeof(nicknames[author]) == 'string'){
+      host = nicknames[author];
+    }
+    else
+    {
+      host = author;
+    }
 
     // Split the post into sections by pipe
     var bodyArray = postData.selftext.split("|")
@@ -217,7 +231,7 @@ function sendToCalendar(name) {
     // bodyArray[1] will have the date/time. Split into sections
     var eventDate = bodyArray[1].split(" ");
 
-    // eventDate will not have the date, time and timezone split into an array a 0,1,2 respectivley 
+    // eventDate will now have the date, time and timezone split into an array a 0,1,2 respectivley 
     var dateArray = eventDate[0].split("-");
     var timeArray = eventDate[1].split(":");
 
@@ -225,7 +239,7 @@ function sendToCalendar(name) {
 
     var event = {
       'summary': bodyArray[3],
-      'description': postData.selftext,
+      'description': postData.selftext + host,
       'start': {
         'dateTime': eventDateTimeString,
         'timeZone': 'UTC',
@@ -238,7 +252,13 @@ function sendToCalendar(name) {
 
     };
 
-    requestCreateGoogleCalendarEvent(event)
+    requestCreateGoogleCalendarEvent(event).then(function (){
+      fs .readFile('credentials.json', (err, content) => {
+        if (err) return console.log('Error loading client secret file:', err);
+        // Authorize a client with credentials, then call the Google Calendar API.
+        authorize(JSON.parse(content), updateSideBar.bind(null));
+      });
+    });
 
   });
 
@@ -252,6 +272,82 @@ function requestCreateGoogleCalendarEvent(event) {
     // Authorize a client with credentials, then call the Google Calendar API.
     authorize(JSON.parse(content), createGoogleCalendarEvent.bind(null, event));
   });
+}
+
+
+function updateSideBar(auth){
+
+  const calendar = google.calendar({
+    version: 'v3',
+    auth
+  });
+
+  // Set the weekday text to use
+  var weekday = new Array(7);
+  weekday[0] = "Sun";
+  weekday[1] = "Mon";
+  weekday[2] = "Tue";
+  weekday[3] = "Wed";
+  weekday[4] = "Thur";
+  weekday[5] = "Fri";
+  weekday[6] = "Sat";
+
+
+  var month = new Array(12);
+  month[0] = "Jan";
+  month[1] = "Feb";
+  month[2] = "Mar";
+  month[3] = "Apr";
+  month[4] = "May";
+  month[5] = "Jun";
+  month[6] = "Jul";
+  month[7] = "Aug";
+  month[8] = "Sept";
+  month[9] = "Oct";
+  month[10] = "Nov";
+  month[11] = "Dec";
+
+  var newSideBarText = 'Date | Time (UTC) | Host | Description\n';
+    newSideBarText = newSideBarText + ':-:|:-:|:-:|:-:\n';
+
+  calendar.events.list({
+    auth: auth,
+    calendarId: data.calendarId,
+    timeMin: (new Date()).toISOString(),
+    maxResults: 10,
+    singleEvents: true,
+  }, function (err,res) {
+    console.log(err);
+    const events = res.data.items;
+    if (events.length) {
+     
+      events.map((event, i) => {
+
+        const date = new Date(event.start.dateTime);
+        
+        var minutes = ('0' + date.getMinutes()).slice(-2)
+        var section1 = weekday[date.getDay()] + ' ' + date.getDate() + ' '  + month[date.getMonth()];
+        var section2 = date.getHours() + ':'  + minutes + ' UTC';
+        var section3 = 'TBC';
+        var section4 = event.summary;
+    
+        newSideBarText = newSideBarText + section1 + '|' + section2 + '|' + section3 +  '|' + section4 + '\n';
+      });
+      
+      r.getSubreddit(data.subRedditName).editSettings({
+        description: newSideBarText
+      })
+
+    } else {
+      console.log('No upcoming events found.');
+    }
+  }
+  );
+
+ 
+    
+  
+
 }
 
 function createGoogleCalendarEvent(event, auth) {
@@ -272,8 +368,14 @@ function createGoogleCalendarEvent(event, auth) {
       console.log('There was an error contacting the Calendar service: ' + err);
       return;
     }
-    console.log('Event created');
-  });
+
+  })
+
+
+  
+ 
+ 
+
 }
 
 
