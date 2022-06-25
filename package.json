@@ -5,7 +5,7 @@
   "main": "main.js",
   "dependencies": {
     "googleapis": "^67.0.0",
-    "node-fetch": "^2.6.1",
+    "node-fetch": "^2.6.7",
     "request": "^2.88.2",
     "snoowrap": "^1.21.0",
     "sqlite3": "^4.1.1",
